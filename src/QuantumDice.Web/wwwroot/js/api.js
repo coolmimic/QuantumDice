@@ -1,5 +1,5 @@
-// API 基础配置
-const API_BASE = 'http://localhost:5000/api';
+// API 基础配置 - 动态获取当前域名
+const API_BASE = window.location.origin + '/api';
 
 // 获取存储的 Token
 function getToken() {
