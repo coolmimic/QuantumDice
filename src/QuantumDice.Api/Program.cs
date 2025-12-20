@@ -13,6 +13,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<QuantumDiceDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// 配置 Redis 缓存
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+    options.InstanceName = "QuantumDice:";
+});
+
 // 注册业务服务
 builder.Services.AddScoped<IDealerService, DealerService>();
 builder.Services.AddScoped<IPlayerService, PlayerService>();
