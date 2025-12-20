@@ -321,6 +321,37 @@ async function renderDealersPage() {
 
 // ========== 群组管理 (庄家) ==========
 async function renderGroupsPage() {
+    let groupsHtml = '<tr><td colspan="6">加载中...</td></tr>';
+
+    try {
+        // 获取当前 Dealer ID
+        const token = JSON.parse(localStorage.getItem('user')).token;
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const dealerId = payload.nameid || payload.sub || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+
+        const result = await api.dealer.getGroups(dealerId);
+        if (result.success && result.data && result.data.length > 0) {
+            groupsHtml = result.data.map(g => `
+                <tr>
+                    <td>${g.telegramGroupId}</td>
+                    <td>${g.groupName || '-'}</td>
+                    <td>${g.playerCount}</td>
+                    <td><span class="badge ${g.isActive ? 'badge-success' : 'badge-danger'}">${g.isActive ? '运行中' : '未激活'}</span></td>
+                    <td>${new Date(g.boundAt).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="configureGroup(${g.id})">配置</button>
+                        <button class="btn btn-sm btn-danger" onclick="unbindGroup(${g.id})">解绑</button>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            groupsHtml = '<tr><td colspan="6">暂无绑定的群组</td></tr>';
+        }
+    } catch (e) {
+        console.error(e);
+        groupsHtml = '<tr><td colspan="6">加载失败</td></tr>';
+    }
+
     return `
         <div class="card">
             <div class="card-header">
@@ -330,7 +361,7 @@ async function renderGroupsPage() {
                 </button>
             </div>
             <div class="table-container">
-                <table>
+                <table id="groups-table">
                     <thead>
                         <tr>
                             <th>群组ID</th>
@@ -342,23 +373,82 @@ async function renderGroupsPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>-1001234567890</td>
-                            <td>测试群组</td>
-                            <td>25</td>
-                            <td><span class="badge badge-success">运行中</span></td>
-                            <td>2024-12-20</td>
-                            <td>
-                                <button class="btn btn-sm btn-secondary">配置</button>
-                                <button class="btn btn-sm btn-danger">解绑</button>
-                            </td>
-                        </tr>
+                        ${groupsHtml}
                     </tbody>
                 </table>
             </div>
         </div>
+        
+        <!-- 绑定群组模态框 -->
+        <div class="modal-overlay" id="bind-group-modal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>绑定群组</h3>
+                    <button class="modal-close" onclick="closeModal('bind-group-modal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="bind-group-form" onsubmit="event.preventDefault(); bindGroup();">
+                        <div class="form-group">
+                            <label>Telegram 群组 ID</label>
+                            <input type="text" id="group-telegram-id" placeholder="-100xxxxxxxxxx" required>
+                            <small class="hint">请确保机器人已加入该群组并设置为管理员。ID通常以 -100 开头。</small>
+                        </div>
+                        <div class="form-group">
+                            <label>群组备注名称</label>
+                            <input type="text" id="group-name" placeholder="例如：测试一群">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('bind-group-modal')">取消</button>
+                    <button class="btn btn-primary" onclick="bindGroup()">绑定</button>
+                </div>
+            </div>
+        </div>
     `;
 }
+
+function showBindGroupModal() {
+    showModal('bind-group-modal');
+}
+
+async function bindGroup() {
+    const telegramId = document.getElementById('group-telegram-id').value;
+    const groupName = document.getElementById('group-name').value;
+
+    if (!telegramId) {
+        alert('请输入 Telegram 群组 ID');
+        return;
+    }
+
+    try {
+        const token = JSON.parse(localStorage.getItem('user')).token;
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const dealerId = payload.nameid || payload.sub || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+
+        const data = {
+            telegramGroupId: parseInt(telegramId),
+            groupName: groupName
+        };
+
+        const result = await api.dealer.bindGroup(dealerId, data);
+
+        if (result.success) {
+            alert('绑定成功');
+            closeModal('bind-group-modal');
+            const content = await renderGroupsPage();
+            document.getElementById('content-area').innerHTML = content;
+        } else {
+            alert('绑定失败: ' + result.message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert('操作失败: ' + e.message);
+    }
+}
+
+function configureGroup(id) { alert('配置功能开发中'); }
+function unbindGroup(id) { alert('解绑功能开发中'); }
 
 // ========== 玩家管理 (庄家) ==========
 async function renderPlayersPage() {
