@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QuantumDice.Api/QuantumDice.Api.csproj" />
+    <Project Path="src/QuantumDice.Core/QuantumDice.Core.csproj" />
+    <Project Path="src/QuantumDice.Infrastructure/QuantumDice.Infrastructure.csproj" />
+    <Project Path="src/QuantumDice.Web/QuantumDice.Web.csproj" />
+  </Folder>
+</Solution>

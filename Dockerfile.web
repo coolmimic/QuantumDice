@@ -1,0 +1,20 @@
+# Web 服务 Dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 5001
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["src/QuantumDice.Web/QuantumDice.Web.csproj", "src/QuantumDice.Web/"]
+RUN dotnet restore "src/QuantumDice.Web/QuantumDice.Web.csproj"
+COPY . .
+WORKDIR "/src/src/QuantumDice.Web"
+RUN dotnet build "QuantumDice.Web.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "QuantumDice.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "QuantumDice.Web.dll"]

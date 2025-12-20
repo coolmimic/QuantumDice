@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: quantumdice-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: quantum_dice
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-QuantumDice@2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - quantumdice-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: quantumdice-redis
+    restart: unless-stopped
+    networks:
+      - quantumdice-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API 服务
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: quantumdice-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      ASPNETCORE_URLS: http://+:5000
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=quantum_dice;Username=postgres;Password=${DB_PASSWORD:-QuantumDice@2024}
+      Jwt__Key: ${JWT_KEY:-QuantumDice_SuperSecretKey_2024!@#$%^&*()}
+      Jwt__Issuer: QuantumDice
+      Jwt__Audience: QuantumDice
+      TelegramBot__Token: ${TELEGRAM_BOT_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - quantumdice-network
+
+  # Web 管理后台
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: quantumdice-web
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      ASPNETCORE_URLS: http://+:5001
+      ASPNETCORE_ENVIRONMENT: Production
+    networks:
+      - quantumdice-network
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: quantumdice-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/certbot:/var/www/certbot:ro
+    depends_on:
+      - api
+      - web
+    networks:
+      - quantumdice-network
+
+networks:
+  quantumdice-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
