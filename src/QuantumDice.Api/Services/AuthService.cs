@@ -11,7 +11,7 @@ namespace QuantumDice.Api.Services;
 public interface IAuthService
 {
     Task<LoginResponse?> LoginAdminAsync(LoginRequest request);
-    Task<LoginResponse?> LoginDealerAsync(LoginRequest request);
+    Task<(LoginResponse? Response, string? Error)> LoginDealerAsync(LoginRequest request);
     ClaimsPrincipal? ValidateToken(string token);
 }
 
@@ -40,13 +40,13 @@ public class AuthService : IAuthService
         return new LoginResponse(token, admin.Username, "Admin", expiresAt);
     }
 
-    public async Task<LoginResponse?> LoginDealerAsync(LoginRequest request)
+    public async Task<(LoginResponse? Response, string? Error)> LoginDealerAsync(LoginRequest request)
     {
         var dealer = await _db.Dealers
             .FirstOrDefaultAsync(d => d.Username == request.Username && d.IsActive);
 
         if (dealer == null || !BCrypt.Net.BCrypt.Verify(request.Password, dealer.PasswordHash))
-            return null;
+            return (null, "用户名或密码错误");
 
         // 检查订阅是否有效
         var hasValidSubscription = await _db.Subscriptions
@@ -55,12 +55,12 @@ public class AuthService : IAuthService
                 && s.EndTime > DateTime.UtcNow);
 
         if (!hasValidSubscription)
-            return null;
+            return (null, "订阅已过期，请联系管理员续费");
 
         var token = GenerateToken(dealer.Id.ToString(), dealer.Username, "Dealer");
         var expiresAt = DateTime.UtcNow.AddHours(24);
 
-        return new LoginResponse(token, dealer.Username, "Dealer", expiresAt);
+        return (new LoginResponse(token, dealer.Username, "Dealer", expiresAt), null);
     }
 
     private string GenerateToken(string userId, string username, string role)

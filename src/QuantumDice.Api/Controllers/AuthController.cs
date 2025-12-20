@@ -37,11 +37,11 @@ public class AuthController : ControllerBase
     [HttpPost("dealer/login")]
     public async Task<ActionResult<ApiResponse<LoginResponse>>> DealerLogin([FromBody] LoginRequest request)
     {
-        var result = await _authService.LoginDealerAsync(request);
-        if (result == null)
-            return Unauthorized(new ApiResponse<LoginResponse>(false, "用户名或密码错误，或订阅已过期", null));
+        var (response, error) = await _authService.LoginDealerAsync(request);
+        if (response == null)
+            return Unauthorized(new ApiResponse<LoginResponse>(false, error ?? "登录失败", null));
 
-        return Ok(new ApiResponse<LoginResponse>(true, "登录成功", result));
+        return Ok(new ApiResponse<LoginResponse>(true, "登录成功", response));
     }
 
     /// <summary>
