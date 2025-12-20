@@ -32,6 +32,12 @@ const api = {
 
             // 处理 401 未授权
             if (response.status === 401) {
+                // 如果是登录接口，直接返回错误信息，不强制刷新
+                if (endpoint.includes('/login')) {
+                    const data = await response.json();
+                    return data;
+                }
+
                 localStorage.removeItem('user');
                 window.location.reload();
                 return { success: false, message: '登录已过期' };
