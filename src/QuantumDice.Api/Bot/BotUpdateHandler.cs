@@ -1,9 +1,11 @@
+using Microsoft.Extensions.Caching.Distributed;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using QuantumDice.Api.Services;
 using QuantumDice.Infrastructure.Data;
+using QuantumDice.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace QuantumDice.Api.Bot;
@@ -18,6 +20,7 @@ public class BotUpdateHandler
     private readonly IGameService _gameService;
     private readonly IDealerService _dealerService;
     private readonly QuantumDiceDbContext _db;
+    private readonly IDistributedCache _cache;
     private readonly ILogger<BotUpdateHandler> _logger;
 
     public BotUpdateHandler(
@@ -26,6 +29,7 @@ public class BotUpdateHandler
         IGameService gameService,
         IDealerService dealerService,
         QuantumDiceDbContext db,
+        IDistributedCache cache,
         ILogger<BotUpdateHandler> logger)
     {
         _botClient = botClient;
@@ -33,6 +37,7 @@ public class BotUpdateHandler
         _gameService = gameService;
         _dealerService = dealerService;
         _db = db;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -94,6 +99,13 @@ public class BotUpdateHandler
         var username = message.From.Username;
         var firstName = message.From.FirstName;
 
+        // 优先处理绑定命令
+        if (text.StartsWith("/bind ") || text.StartsWith("/绑定 "))
+        {
+            await HandleBindCommandAsync(message, ct);
+            return;
+        }
+
         // 检查群组是否已绑定
         var group = await _db.Groups
             .Include(g => g.Dealer)
@@ -125,6 +137,75 @@ public class BotUpdateHandler
         {
             return;
         }
+    }
+
+    private async Task HandleBindCommandAsync(Message message, CancellationToken ct)
+    {
+        var text = message.Text ?? "";
+        var parts = text.Split(' ');
+        if (parts.Length < 2) return;
+
+        var code = parts[1].Trim();
+        var chatId = message.Chat.Id;
+        var chatTitle = message.Chat.Title;
+
+        // 验证验证码
+        var dealerIdStr = await _cache.GetStringAsync($"bind_code:{code}", ct);
+        if (string.IsNullOrEmpty(dealerIdStr))
+        {
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "❌ 绑定码无效或已过期",
+                cancellationToken: ct
+            );
+            return;
+        }
+
+        var dealerId = int.Parse(dealerIdStr);
+
+        // 查找或创建群组
+        var group = await _db.Groups.FirstOrDefaultAsync(g => g.TelegramGroupId == chatId, ct);
+        if (group == null)
+        {
+            group = new Core.Entities.Group
+            {
+                TelegramGroupId = chatId,
+                GroupName = chatTitle,
+                DealerId = dealerId,
+                IsActive = true,
+                BoundAt = DateTime.UtcNow
+            };
+            _db.Groups.Add(group);
+        }
+        else
+        {
+            if (group.IsActive && group.DealerId != dealerId)
+            {
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "❌ 该群组已被其他庄家绑定",
+                    cancellationToken: ct
+                );
+                return;
+            }
+
+            // 更新绑定
+            group.DealerId = dealerId;
+            group.GroupName = chatTitle; // 更新群名
+            group.IsActive = true;
+            group.BoundAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        
+        // 清除验证码 (可选，防止重复使用，但5分钟过期也无妨)
+        await _cache.RemoveAsync($"bind_code:{code}", ct);
+
+        await _botClient.SendMessage(
+            chatId: chatId,
+            text: $"✅ 群组绑定成功！\n庄家ID: {dealerId}\n群组: {chatTitle}",
+            cancellationToken: ct
+        );
     }
 
     private async Task HandleGroupCommandAsync(Message message, long groupId, CancellationToken ct)

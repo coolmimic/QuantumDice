@@ -353,6 +353,28 @@ async function renderGroupsPage() {
     }
 
     return `
+        <style>
+            .binding-steps { padding: 10px; }
+            .binding-steps p { margin-bottom: 10px; line-height: 1.5; }
+            .code-box { 
+                background: #f5f5f5; 
+                padding: 15px; 
+                border-radius: 8px; 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center;
+                margin: 15px 0;
+                border: 1px dashed #ccc;
+            }
+            .code-box span { 
+                font-family: monospace; 
+                font-size: 24px; 
+                font-weight: bold; 
+                color: #333; 
+                letter-spacing: 2px;
+            }
+            .hint { color: #888; font-size: 12px; }
+        </style>
         <div class="card">
             <div class="card-header">
                 <h3>我的群组</h3>
@@ -387,64 +409,54 @@ async function renderGroupsPage() {
                     <button class="modal-close" onclick="closeModal('bind-group-modal')">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <form id="bind-group-form" onsubmit="event.preventDefault(); bindGroup();">
-                        <div class="form-group">
-                            <label>Telegram 群组 ID</label>
-                            <input type="text" id="group-telegram-id" placeholder="-100xxxxxxxxxx" required>
-                            <small class="hint">请确保机器人已加入该群组并设置为管理员。ID通常以 -100 开头。</small>
+                    <div class="binding-steps">
+                        <p>1. 将机器人 <strong>@QuantumDice_Bot</strong> 拉入群组并设为管理员</p>
+                        <p>2. 在群里发送以下命令进行绑定：</p>
+                        <div class="code-box">
+                            <span id="binding-code">正在获取...</span>
+                            <button class="btn btn-sm btn-secondary" onclick="copyCode()">复制</button>
                         </div>
-                        <div class="form-group">
-                            <label>群组备注名称</label>
-                            <input type="text" id="group-name" placeholder="例如：测试一群">
-                        </div>
-                    </form>
+                        <p class="hint">⚠️ 验证码有效期 5 分钟，请尽快使用</p>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeModal('bind-group-modal')">取消</button>
-                    <button class="btn btn-primary" onclick="bindGroup()">绑定</button>
+                    <button class="btn btn-secondary" onclick="closeModal('bind-group-modal')">关闭</button>
+                    <button class="btn btn-primary" onclick="closeModal('bind-group-modal'); renderContent('groups');">我已绑定 (刷新列表)</button>
                 </div>
             </div>
         </div>
     `;
 }
 
-function showBindGroupModal() {
+async function showBindGroupModal() {
     showModal('bind-group-modal');
-}
-
-async function bindGroup() {
-    const telegramId = document.getElementById('group-telegram-id').value;
-    const groupName = document.getElementById('group-name').value;
-
-    if (!telegramId) {
-        alert('请输入 Telegram 群组 ID');
-        return;
-    }
+    document.getElementById('binding-code').textContent = '正在获取...';
 
     try {
         const token = JSON.parse(localStorage.getItem('user')).token;
         const payload = JSON.parse(atob(token.split('.')[1]));
         const dealerId = payload.nameid || payload.sub || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
 
-        const data = {
-            telegramGroupId: parseInt(telegramId),
-            groupName: groupName
-        };
-
-        const result = await api.dealer.bindGroup(dealerId, data);
-
+        const result = await api.dealer.generateBindingCode(dealerId);
         if (result.success) {
-            alert('绑定成功');
-            closeModal('bind-group-modal');
-            const content = await renderGroupsPage();
-            document.getElementById('content-area').innerHTML = content;
+            const code = result.data;
+            document.getElementById('binding-code').textContent = `/bind ${code}`;
         } else {
-            alert('绑定失败: ' + result.message);
+            document.getElementById('binding-code').textContent = '获取失败';
         }
     } catch (e) {
         console.error(e);
-        alert('操作失败: ' + e.message);
+        document.getElementById('binding-code').textContent = '网络错误';
     }
+}
+
+function copyCode() {
+    const text = document.getElementById('binding-code').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('已复制到剪贴板');
+    }).catch(err => {
+        console.error('复制失败', err);
+    });
 }
 
 function configureGroup(id) { alert('配置功能开发中'); }

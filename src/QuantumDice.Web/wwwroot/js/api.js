@@ -105,6 +105,7 @@ const api = {
         getGroups: (dealerId) => api.get(`/dealer/groups?dealerId=${dealerId}`),
         getGroup: (groupId) => api.get(`/dealer/groups/${groupId}`),
         bindGroup: (dealerId, data) => api.post(`/dealer/groups?dealerId=${dealerId}`, data),
+        generateBindingCode: (dealerId) => api.post(`/dealer/groups/binding-code?dealerId=${dealerId}`),
         unbindGroup: (groupId) => api.delete(`/dealer/groups/${groupId}`),
         getOddsConfig: (groupId) => api.get(`/dealer/groups/${groupId}/odds`),
         updateOddsConfig: (groupId, data) => api.put(`/dealer/groups/${groupId}/odds`, data),

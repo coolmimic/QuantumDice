@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuantumDice.Api.DTOs;
@@ -14,10 +15,31 @@ namespace QuantumDice.Api.Controllers.Dealer;
 public class DealerGroupController : ControllerBase
 {
     private readonly IGroupService _groupService;
+    private readonly IDistributedCache _cache;
 
-    public DealerGroupController(IGroupService groupService)
+    public DealerGroupController(IGroupService groupService, IDistributedCache cache)
     {
         _groupService = groupService;
+        _cache = cache;
+    }
+
+    /// <summary>
+    /// 生成群组绑定码
+    /// </summary>
+    [HttpPost("binding-code")]
+    public async Task<ActionResult<ApiResponse<string>>> GenerateBindingCode([FromQuery] int dealerId)
+    {
+        // 简单生成6位数字码
+        var code = new Random().Next(100000, 999999).ToString();
+        
+        // 存入 Redis，有效期 5 分钟
+        await _cache.SetStringAsync(
+            $"bind_code:{code}", 
+            dealerId.ToString(), 
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) }
+        );
+
+        return Ok(new ApiResponse<string>(true, "生成成功", code));
     }
 
     /// <summary>
